@@ -21,34 +21,29 @@ jobs:
         distribution: 'temurin'
         cache: 'maven'
 
-    # ШАГ 1: ДИАГНОСТИКА ПУТИ
-    - name: 🔍 List files and folders for debugging
-      run: |
-        echo "Current working directory:"
-        pwd
-        echo "Files and folders in this directory (ищем pom.xml или папку, где он лежит):"
-        ls -F
-    
-    # ШАГ 2: Сборка и тестирование Java (CI)
-    # ПРИМЕЧАНИЕ: Если ваш pom.xml находится не в 'collab-service/',
-    # замените 'collab-service' на правильный путь, используя данные из логов ШАГА 1.
+    # ШАГ 1: Сборка и тестирование Java (CI)
+    # Используем cd для перехода в папку проекта (collab-service/), где лежит pom.xml
     - name: 📦 Maven Build and Tests (CI)
       run: |
-        # Переход в папку, где лежит pom.xml
+        echo "Переход в папку проекта: collab-service/"
         cd collab-service 
-        # Запуск сборки Maven
+        # Запуск сборки Maven, которая создает JAR-файл в target/
         mvn clean install -DskipTests 
         
     # --- Docker Image Build (CD) ---
     
-    # ШАГ 3: Определение тега и сборка Docker
+    # ШАГ 2: Определение тега
     - name: 🏷️ Define Docker Tag
       id: docker_tag
       run: echo "TAG=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT 
 
+    # ШАГ 3: Сборка Docker-образа
+    # Используется контекст в корне и Dockerfile из корня.
+    # Dockerfile, вероятно, копирует JAR из ./collab-service/target/
     - name: 🏗️ Build Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./collab-service # Контекст сборки должен быть папкой, где лежит Dockerfile
-        push: false 
+        context: .                                  # Контекст сборки — корень репозитория
+        file: ./Dockerfile                          # Dockerfile находится в корне
+        push: false                                 # Не пушим в Registry, если деплой на Render идет через CI/CD
         tags: collaborative-document-app:latest, collaborative-document-app:${{ steps.docker_tag.outputs.TAG }}
