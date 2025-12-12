@@ -1,0 +1,43 @@
+name: Docker CI/CD Build
+
+on:
+  push:
+    branches: [ "master", "main" ] # Запускаем при пуше в master или main
+  pull_request:
+    branches: [ "master", "main" ] # Запускаем при создании Pull Request
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📝 Checkout code
+      uses: actions/checkout@v4
+
+    # 1. Сборка и тестирование Java (CI)
+    - name: 🛠️ Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: 'maven'
+
+    - name: 📦 Maven Build (CI)
+      # ИСПРАВЛЕНО: Указываем рабочий каталог, где находится pom.xml
+      working-directory: ./collaborative-document-app-collab-service 
+      run: mvn clean install -DskipTests 
+    
+    # --- Docker Image Build (CD) ---
+    
+    - name: 🏷️ Define Docker Tag
+      id: docker_tag
+      run: echo "TAG=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT 
+
+    - name: 🏗️ Build and Tag Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: . # Контекст - корень репозитория
+        push: false 
+        tags: collaborative-document-app:latest, collaborative-document-app:${{ steps.docker_tag.outputs.TAG }} 
+        # Если ваш Dockerfile находится в корне, убедитесь, что в нем правильно указан путь к JAR:
+        # COPY collaborative-document-app-collab-service/target/*.jar app.jar
