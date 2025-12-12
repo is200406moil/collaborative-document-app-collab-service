@@ -15,17 +15,15 @@ jobs:
       uses: actions/checkout@v4
 
     # 1. Сборка и тестирование Java (CI)
-- name: 🛠️ Set up JDK 17
+    - name: 🛠️ Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: 'maven'
+        cache: 'maven' # Используем кэш Maven для ускорения
 
     - name: 📦 Maven Build and Tests (CI)
-      # Используем 'working-directory' для перехода в папку, где лежит pom.xml
-      working-directory: ./collaborative-document-app-collab-service
-      run: mvn clean install -DskipTests
+      run: mvn clean install -DskipTests # Сборка проекта
     
     # --- Docker Image Build (CD) ---
     
