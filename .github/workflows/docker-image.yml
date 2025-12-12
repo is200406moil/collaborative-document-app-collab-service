@@ -49,6 +49,7 @@ jobs:
     - name: 🏗️ Build Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./collab-service # Контекст сборки должен быть папкой, где лежит Dockerfile
+        context: .
+        file: ./Dockerfile
         push: false 
         tags: collaborative-document-app:latest, collaborative-document-app:${{ steps.docker_tag.outputs.TAG }}
