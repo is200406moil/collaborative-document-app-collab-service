@@ -14,35 +14,41 @@ jobs:
     - name: 📝 Checkout code
       uses: actions/checkout@v4
 
-    # 1. Сборка и тестирование Java (CI)
     - name: 🛠️ Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: 'maven' # Используем кэш Maven для ускорения
+        cache: 'maven'
 
-    - name: 📦 Maven Build and Tests (CI)
-      run: mvn clean install -DskipTests # Сборка проекта
+    # ШАГ 1: ДИАГНОСТИКА ПУТИ
+    - name: 🔍 List files and folders for debugging
+      run: |
+        echo "Current working directory:"
+        pwd
+        echo "Files and folders in this directory (ищем pom.xml или папку, где он лежит):"
+        ls -F
     
+    # ШАГ 2: Сборка и тестирование Java (CI)
+    # ПРИМЕЧАНИЕ: Если ваш pom.xml находится не в 'collab-service/',
+    # замените 'collab-service' на правильный путь, используя данные из логов ШАГА 1.
+    - name: 📦 Maven Build and Tests (CI)
+      run: |
+        # Переход в папку, где лежит pom.xml
+        cd collab-service 
+        # Запуск сборки Maven
+        mvn clean install -DskipTests 
+        
     # --- Docker Image Build (CD) ---
     
+    # ШАГ 3: Определение тега и сборка Docker
     - name: 🏷️ Define Docker Tag
       id: docker_tag
-      run: echo "TAG=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT # Используем 7 символов хеша для тега
-
-    - name: 🐳 Login to Docker Hub (Если нужен push)
-      # Этот шаг нужен только, если вы собираетесь пушить образ в Docker Hub или другой Registry
-      # uses: docker/login-action@v3 
-      # with:
-      #   username: ${{ secrets.DOCKER_USERNAME }}
-      #   password: ${{ secrets.DOCKER_PASSWORD }}
-      run: echo "Skipping Docker Login for this MVP"
+      run: echo "TAG=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT 
 
     - name: 🏗️ Build Docker image
       uses: docker/build-push-action@v5
       with:
-        context: .
-        push: false # Собираем образ, но не пушим (если Render забирает его по URL)
-        tags: collaborative-document-app:latest, collaborative-document-app:${{ steps.docker_tag.outputs.TAG }} 
-        # В вашем Dockerfile JAR-файл должен быть собран и скопирован правильно.
+        context: ./collab-service # Контекст сборки должен быть папкой, где лежит Dockerfile
+        push: false 
+        tags: collaborative-document-app:latest, collaborative-document-app:${{ steps.docker_tag.outputs.TAG }}
