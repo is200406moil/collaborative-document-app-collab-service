@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Совместное редактирование (MVP)</title>
+    <script src="https://unpkg.com/graphql-ws/umd/graphql-ws.min.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        textarea { width: 100%; height: 300px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; margin-top: 10px; }
+        .status { margin-bottom: 10px; font-size: 0.9em; color: #666; }
+        h2 { margin-top: 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Документ: doc1</h2>
+    <div class="status" id="status">Подключение...</div>
+    <textarea id="editor" placeholder="Начните печатать..."></textarea>
+</div>
+
+<script>
+    const DOC_ID = "doc1";
+    const editor = document.getElementById('editor');
+    const statusDiv = document.getElementById('status');
+    let isRemoteUpdate = false; // Флаг, чтобы не отправлять обратно то, что пришло с сервера
+
+    // 1. Клиент для Subscriptions (WebSocket)
+    const client = graphqlWs.createClient({
+        url: 'ws://' + window.location.host + '/graphql',
+    });
+
+    // 2. Функция отправки изменений (Mutation)
+    async function updateDocument(content) {
+        const query = `
+            mutation Update($id: ID!, $content: String!) {
+                updateDocument(id: $id, content: $content) {
+                    id
+                    version
+                }
+            }
+        `;
+        
+        try {
+            await fetch('/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, variables: { id: DOC_ID, content } })
+            });
+            statusDiv.textContent = 'Сохранено...';
+        } catch (e) {
+            console.error(e);
+            statusDiv.textContent = 'Ошибка сохранения';
+        }
+    }
+
+    // 3. Загрузка начального состояния (Query)
+    async function loadDocument() {
+        const query = `
+            query Get($id: ID!) {
+                getDocument(id: $id) {
+                    content
+                }
+            }
+        `;
+        
+        const response = await fetch('/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, variables: { id: DOC_ID } })
+        });
+        
+        const result = await response.json();
+        if (result.data && result.data.getDocument) {
+            editor.value = result.data.getDocument.content || "";
+        }
+    }
+
+    // 4. Подписка на изменения (Subscription)
+    (async () => {
+        await loadDocument(); // Сначала грузим текст
+        statusDiv.textContent = 'Готов к работе';
+
+        const query = `
+            subscription OnUpdate($id: ID!) {
+                documentUpdated(id: $id) {
+                    content
+                }
+            }
+        `;
+
+        // Запуск подписки
+        client.subscribe(
+            { query, variables: { id: DOC_ID } },
+            {
+                next: (data) => {
+                    // Пришли данные от сервера
+                    if (data.data && data.data.documentUpdated) {
+                        const newContent = data.data.documentUpdated.content;
+                        // Если текст отличается от того, что у нас, обновляем
+                        if (editor.value !== newContent) {
+                            isRemoteUpdate = true; // Ставим флаг, что это не мы печатали
+                            const cursorPos = editor.selectionStart; // Сохраняем позицию курсора
+                            editor.value = newContent;
+                            // Пытаемся вернуть курсор (простая логика для MVP)
+                            editor.selectionStart = cursorPos; 
+                            editor.selectionEnd = cursorPos;
+                            statusDiv.textContent = 'Обновлено извне';
+                            isRemoteUpdate = false;
+                        }
+                    }
+                },
+                error: (err) => { statusDiv.textContent = 'Ошибка соединения'; console.error(err); },
+                complete: () => { statusDiv.textContent = 'Соединение закрыто'; },
+            },
+        );
+    })();
+
+    // 5. Обработчик ввода текста
+    editor.addEventListener('input', (e) => {
+        if (!isRemoteUpdate) {
+            statusDiv.textContent = 'Печатаю...';
+            // В реальном проекте тут нужен debounce (задержка), но для MVP отправим сразу
+            updateDocument(e.target.value);
+        }
+    });
+</script>
+
+</body>
+</html>

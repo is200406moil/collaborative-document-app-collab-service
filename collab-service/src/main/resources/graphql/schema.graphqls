@@ -1,0 +1,17 @@
+type Document {
+    id: ID!
+    content: String
+    version: Int  # ИСПРАВЛЕНО: Long заменено на Int
+}
+
+type Query {
+    getDocument(id: ID!): Document
+}
+
+type Mutation {
+    updateDocument(id: ID!, content: String!): Document
+}
+
+type Subscription {
+    documentUpdated(id: ID!): Document
+}
